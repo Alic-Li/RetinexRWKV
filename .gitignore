@@ -1,0 +1,6 @@
+datasets/**/**/*.jpg
+datasets/**/**/*.png
+datasets/**/**/*.gif
+datasets/**/**/*.bmp
+datasets/**/**/*.jpeg
+

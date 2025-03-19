@@ -1,0 +1,35 @@
+{
+  "model": {
+    "name": "RetinexFormer",
+    "params": {
+      "in_channels": 3,
+      "out_channels": 3,
+      "n_feat": 16,
+      "stage": 1,
+      "num_blocks": [1, 2, 2]
+    }
+  },
+  "train": {
+    "epochs": 500,
+    "batch_size": 32,
+    "lr": 0.0005,
+    "dataset": {
+      "train_dir": "datasets/Train_Low_Light_2025/",
+      "val_dir": "datasets/Val_New/"
+    },
+    "patch_size": 256,
+    "num_workers": 4,
+    "val_epoch": 50,
+    "pretrained_weights" : ""
+  },
+  "optimizer": {
+    "type": "Adam",
+    "betas": [0.9, 0.999]
+  },
+  "scheduler": {
+    "type": "CosineAnnealingRestartLR",
+    "periods": [200, 400, 500],
+    "restart_weights": [0.5, 0.5, 0.5],
+    "eta_min": 1e-7
+  }
+}
