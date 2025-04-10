@@ -3,4 +3,4 @@ datasets/**/**/*.png
 datasets/**/**/*.gif
 datasets/**/**/*.bmp
 datasets/**/**/*.jpeg
-
+__pycache__

@@ -86,7 +86,7 @@ def process_and_save_images(input_dir, output_dir, model_path, device):
 if __name__ == '__main__':
     input_dir = "/home/alic-li/RetinexRWKV/datasets/test_2025/input/" 
     output_dir = "/home/alic-li/RetinexRWKV/datasets/test_2025/output/"
-    model_path = "./best_model.pth" 
+    model_path = "./best_model_nfeat_16.pth" 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     process_and_save_images(input_dir, output_dir, model_path, device)

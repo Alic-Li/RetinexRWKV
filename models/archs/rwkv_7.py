@@ -37,7 +37,7 @@ class RWKV7Block(nn.Module):
         return x, v_first
     
 if __name__ == "__main__":
-    dim = 512  # example dimension
+    dim = 1024  # example dimension
     block_id = 0
     n_blocks = 12
     v_first = None
