@@ -13,13 +13,7 @@ torch.backends.cuda.matmul.allow_tf32 = True
 # torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
 # torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = True
 torch._C._jit_set_autocast_mode(False)
-
-
 args = types.SimpleNamespace()
-
-# model download: https://huggingface.co/BlinkDL/rwkv-7-world
-
-MODEL_PATH = "/home/alic-li/RWKV-v7/pretrained_weight/RWKV-x070-World-0.1B-v2.8-20241210-ctx4096.pth"
 
 # for 0.1B
 args.n_layer = 12
@@ -33,8 +27,8 @@ D_GATE_LORA = 128
 
 args.vocab_size = 65536
 
-# DTYPE = torch.bfloat16
-DTYPE = torch.half # better
+DTYPE = torch.float32 # torch.bfloat16 or torch.bfloat16 for training~
+# DTYPE = torch.half # better
 
 args.head_size_a = 64 # don't change
 HEAD_SIZE = args.head_size_a
@@ -54,7 +48,7 @@ if USE_CUDA_KERNEL:
 
     from torch.utils.cpp_extension import load
 
-    load(name="wkv7", sources=["models/archs/RWKV-v7/cuda/wkv7_op.cpp", f"models/archs/RWKV-v7/cuda/wkv7.cu"], is_python_module=False,
+    load(name="wkv7", sources=["models/archs/rwkv7_cuda/cuda/wkv7_op.cpp", f"models/archs/rwkv7_cuda/cuda/wkv7.cu"], is_python_module=False,
                         verbose=True, extra_cuda_cflags=[ '-xhip', '-fopenmp', '-ffast-math', '-O3', '--offload-arch=gfx1100','-munsafe-fp-atomics', f"-D_N_={HEAD_SIZE}"])
     class WKV_7(torch.autograd.Function):
         @staticmethod
@@ -235,7 +229,7 @@ class RWKV_CMix_x070(MyModule):
 # RWKV Block
 ########################################################################################################
 
-class Block(MyModule):
+class RWKV7Block(MyModule):
     def __init__(self, args, layer_id):
         super().__init__()
         self.args = args
@@ -271,7 +265,7 @@ class RWKV(nn.Module):
         args.dim_ffn = args.n_embd * 4
         self.emb = nn.Embedding(args.vocab_size, args.n_embd)
 
-        self.blocks = nn.ModuleList([Block(args, i) for i in range(args.n_layer)])
+        self.blocks = nn.ModuleList([RWKV7Block(args, i) for i in range(args.n_layer)])
 
         self.ln_out = nn.LayerNorm(args.n_embd)
         self.head = nn.Linear(args.n_embd, args.vocab_size, bias=False)
@@ -290,9 +284,12 @@ class RWKV(nn.Module):
         return x
 
 if __name__ == "__main__":
-    model = Block(args, layer_id=0).to(dtype=DTYPE).cuda()
+    model = RWKV7Block(args, layer_id=0).to(dtype=DTYPE).cuda()
+    att =  RWKV_Tmix_x070(args, layer_id=0).to(dtype=DTYPE).cuda()
     print(args)
-    x = torch.randn(1, 64, 768).to(dtype=DTYPE).cuda() # x[B,T,C]
+    x = torch.randn(1, 12, 768).to(dtype=DTYPE).cuda() # x[B,T,C]
     print(x.shape)
     out = model.forward(x=x, v_first=x)
+    att_out = att.forward(x=x, v_first=x)
     print(out[0].shape)
+    print(att_out[0].shape)
