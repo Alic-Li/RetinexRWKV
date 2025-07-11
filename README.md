@@ -42,13 +42,13 @@
 - Use Nvidia cuda with Python 3.12 
 ```sh
 pip install torch torchvision torchaudio
-pip install rwkv-fla[cuda]
+pip install rwkv-fla[cuda]==0.7.202503140658
 pip install -r requirements.txt
 ```
 - Use AMD Radeon Rocm with Python 3.12 
 ```sh
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm6.2.4
-pip install rwkv-fla[rocm]
+pip install rwkv-fla[rocm]==0.7.202503140658
 pip install -r requirements.txt
 ```
 ## 2. Prepare Dataset
