@@ -3,17 +3,17 @@ import torch
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import RandomCrop
-from models.archs.RetinexFormer_arch import RetinexFormer
-from models.lr_scheduler import CosineAnnealingRestartLR
+from models.archs.RetinexRWKV_arch import RetinexFormer
 from skimage.metrics import structural_similarity as ssim
 import os
 from PIL import Image
 from tqdm import tqdm 
 from thop import profile
+from torchvision.utils import save_image 
 
 
 class PairedDataset(Dataset):
-    def __init__(self, input_dir, gt_dir, patch_size=256, train=True):
+    def __init__(self, input_dir, gt_dir, patch_size=512, train=True):
         self.input_dir = input_dir
         self.gt_dir = gt_dir
         self.patch_size = patch_size
@@ -52,11 +52,24 @@ def validate(model, val_loader, device):
     psnr_list = []
     ssim_list = []
     
+    # 创建保存目录
+    save_dir = './val_out_10'
+    os.makedirs(save_dir, exist_ok=True)
+    
     # 使用 tqdm 包装验证数据加载器
     with torch.no_grad():
-        for inputs, targets in tqdm(val_loader, desc="Validating", leave=False):
+        for idx, (inputs, targets) in enumerate(tqdm(val_loader, desc="Validating", leave=False)):
             inputs = inputs.to(device)
             outputs = model(inputs)
+            
+            # 保存前十张图片
+            if idx < 10:
+                # 保存输入图片
+                save_image(inputs.cpu(), os.path.join(save_dir, f'val_{idx:02d}_input.png'), normalize=True)
+                # 保存目标图片
+                save_image(targets, os.path.join(save_dir, f'val_{idx:02d}_target.png'), normalize=True)
+                # 保存输出图片
+                save_image(outputs.cpu(), os.path.join(save_dir, f'val_{idx:02d}_output.png'), normalize=True)
             
             # 计算指标
             outputs_np = outputs.cpu().numpy().transpose(0, 2, 3, 1)
@@ -123,15 +136,14 @@ def main():
     # print(f"Total Parameters: {params / 1e6:.2f} M")  # 转换为百万参数量
     
     # 定义优化器和损失函数
-    optimizer = torch.optim.Adam(model.parameters(), 
+    optimizer = torch.optim.AdamW(model.parameters(), 
                                  lr=config['train']['lr'],
                                  betas=config['optimizer']['betas'])
     
-    # 学习率调度器
-    scheduler = CosineAnnealingRestartLR(optimizer,
-                                         periods=config['scheduler']['periods'],
-                                         restart_weights=config['scheduler']['restart_weights'],
-                                         eta_min=config['scheduler']['eta_min'])
+    # 获取初始和最终学习率
+    lr_init = config['train']['lr']
+    lr_final = config['train'].get('lr_final', 1e-6)  # 默认最终学习率为1e-6
+    total_epochs = config['train']['epochs']
     
     best_psnr = 0
     best_ssim = 0
@@ -139,6 +151,11 @@ def main():
         model.train()
         total_loss_epoch = 0  # 用于记录每个 epoch 的总 loss
         num_batches = len(train_loader)
+        
+        # 计算当前epoch的学习率（线性衰减）
+        current_lr = lr_init - (lr_init - lr_final) * epoch / total_epochs
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = current_lr
         
         # 使用 tqdm 包装训练数据加载器
         train_loop = tqdm(enumerate(train_loader), total=num_batches, desc=f"Epoch {epoch+1}/{config['train']['epochs']}")
@@ -160,7 +177,8 @@ def main():
             # 更新进度条描述信息
             total_loss_epoch += l1_loss.item()
             avg_loss = total_loss_epoch / (batch_idx + 1)
-            train_loop.set_postfix(loss=f"{avg_loss:.4f}")
+            train_loop.set_postfix(loss=f"{avg_loss:.4f}", lr=f"{current_lr:.6f}")
+            
         if (epoch + 1) % config["train"]["val_epoch"] == 0:
             # 验证
             val_psnr, val_ssim = validate(model, val_loader, device)
@@ -170,11 +188,8 @@ def main():
                 best_ssim = val_ssim
                 torch.save(model.state_dict(), 'best_model.pth')
             print(f'Epoch [{epoch+1}/{config["train"]["epochs"]}] '
-                  f'Val PSNR: {val_psnr:.2f} Val SSIM: {val_ssim:.4f} Best SSIM: {best_ssim:.4f}')
-        
-        # 更新学习率
-        scheduler.step()
-
+                  f'Val PSNR: {val_psnr:.2f} Val SSIM: {val_ssim:.4f} Best SSIM: {best_ssim:.4f} '
+                  f'LR: {current_lr:.6f}')
 
 if __name__ == '__main__':
     main()

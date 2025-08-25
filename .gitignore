@@ -4,3 +4,4 @@ datasets/**/**/*.gif
 datasets/**/**/*.bmp
 datasets/**/**/*.jpeg
 __pycache__
+val_out_10/

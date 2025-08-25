@@ -3,7 +3,7 @@ import json
 from PIL import Image
 import torch
 import numpy as np
-from models.archs.RetinexFormer_arch import RetinexFormer 
+from models.archs.RetinexRWKV_arch import RetinexFormer 
 
 def process_and_save_images(input_dir, output_dir, model_path, device):
     os.makedirs(output_dir, exist_ok=True)
@@ -11,7 +11,7 @@ def process_and_save_images(input_dir, output_dir, model_path, device):
     # 加载模型
     with open('config.json') as f: 
         config = json.load(f) 
-    model = RetinexFormer(**config['model']['params']).to(device)
+    model = RetinexFormer(**config['model']['params']).to(dtype=torch.bfloat16, device="cuda")
     if os.path.exists(model_path):
         print(f"Loading pretrained weights from {model_path}")
         model.load_state_dict(torch.load(model_path, map_location=device))
@@ -31,7 +31,7 @@ def process_and_save_images(input_dir, output_dir, model_path, device):
         height, width, _ = img.shape
         
         # 判断是否需要裁切
-        if height > 2000 and width > 3000:
+        if height > 8000 and width > 8000:
             print(f"Image {file_name} is larger than 2000x3000. Splitting into 4 parts.")
             
             # 分割图像为四部分
@@ -52,11 +52,13 @@ def process_and_save_images(input_dir, output_dir, model_path, device):
                 with torch.no_grad():
                     output_tensor = model(part_tensor)
                 
+                
                 # 处理输出
                 output_np = output_tensor.squeeze(0).cpu().numpy().transpose(1, 2, 0)  # 去除 batch 维度并转为 HWC 格式
                 output_np = np.clip(output_np * 255.0, 0, 255).astype(np.uint8)  # 将像素值限制在 [0, 255] 并转换为 uint8
                 
                 processed_parts.append(output_np)
+                torch.cuda.empty_cache()
             
             # 重组图像
             top = np.concatenate((processed_parts[0], processed_parts[1]), axis=1)
@@ -64,14 +66,14 @@ def process_and_save_images(input_dir, output_dir, model_path, device):
             output_np = np.concatenate((top, bottom), axis=0)
         else:
             # 转换为 CHW 格式并添加 batch 维度
-            img_tensor = torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0).to(device)
+            img_tensor = torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0).to(dtype=torch.bfloat16, device="cuda")
             
             # 前向传播
             with torch.no_grad():
                 output_tensor = model(img_tensor)
             
             # 处理输出
-            output_np = output_tensor.squeeze(0).cpu().numpy().transpose(1, 2, 0)  # 去除 batch 维度并转为 HWC 格式
+            output_np = output_tensor.squeeze(0).float().cpu().numpy().transpose(1, 2, 0)
             output_np = np.clip(output_np * 255.0, 0, 255).astype(np.uint8)  # 将像素值限制在 [0, 255] 并转换为 uint8
         
         # 保存处理后的图片
@@ -86,7 +88,7 @@ def process_and_save_images(input_dir, output_dir, model_path, device):
 if __name__ == '__main__':
     input_dir = "/home/alic-li/RetinexRWKV/datasets/test_2025/input/" 
     output_dir = "/home/alic-li/RetinexRWKV/datasets/test_2025/output/"
-    model_path = "./best_model_nfeat_16.pth" 
+    model_path = "./best_model.pth" 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     process_and_save_images(input_dir, output_dir, model_path, device)
